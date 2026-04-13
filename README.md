@@ -2,6 +2,8 @@
 
 https://gitee.com/hailiang-wang/deeplearning-course-src
 
+Get started with Deep Learning using PyTorch.
+
 ## 准备
 
 * [前言](setup/preface.ipynb)
@@ -26,3 +28,8 @@ https://gitee.com/hailiang-wang/deeplearning-course-src
 * [第 14 章 自然语言处理：预训练](./notebooks/chapter14_natural-language-processing-pretraining/index.ipynb)
 * [第 15 章 自然语言处理：应用](./notebooks/chapter15_natural-language-processing-applications/index.ipynb)
 * [第 16 章 附录：深度学习工具](./notebooks/chapter16_appendix-tools-for-deep-learning/index.ipynb)
+
+
+## Give credits to D2C Community
+
+Source code borrowed from [d2l.ai](https://github.com/d2l-ai/d2l-en)
