@@ -6,6 +6,7 @@
 *.pyc
 *.log
 __pycache__
+*.ipynb
 *.egg-info
 tmp/
 package-lock.json
