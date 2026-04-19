@@ -45,3 +45,4 @@ dist/
 *~
 
 assets/backup/
+notebooks/data-unversioned/p1ch6/cifar-10-python.tar.gz
