@@ -85,7 +85,7 @@ class ResNetGenerator(nn.Module):
 模型的加载
 '''
 netG = ResNetGenerator()
-model_path = '../data/p1ch2/horse2zebra_0.4.0.pth'
+model_path = '../data/p1ch2/horse2zebra_0.4.0.pthm'
 model_data = torch.load(model_path)
 netG.load_state_dict(model_data)  # 恢复了之前，别人训练好的神经网络，能执行具体的任务
 
