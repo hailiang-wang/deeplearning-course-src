@@ -105,7 +105,7 @@ preprocess = transforms.Compose([transforms.Resize(256),
 
 
 # img = Image.open("../data/p1ch2/horse.jpg")
-img = Image.open("C:\\Downloads\\Screenshot2026-06-01164108.jpg")
+img = Image.open("C:\\Downloads\\WeixinImage_20260614094709_11_5.jpg")
 img_t = preprocess(img)
 batch_t = torch.unsqueeze(img_t, 0)
 

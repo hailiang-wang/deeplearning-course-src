@@ -1,3 +1,4 @@
 *.pth
 runs/
 *.pt
+tmp_*
