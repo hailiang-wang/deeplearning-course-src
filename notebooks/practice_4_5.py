@@ -1,65 +1,50 @@
+import numpy as np
+import torch
+
+torch.set_printoptions(edgeitems=3, threshold=30)
+
+lines = []
+with open("data/p1ch4/jane-austen/1342-0.txt", "r", encoding="utf-8") as fin:
+    lines = fin.readlines()[:10]
+
+contents = []
+for l in lines:
+    l = l.strip()
+
+    if l:
+        print(l)
+        contents.append(l)
+
+print(len(contents))
+
+l = contents[0]
+letter_t = torch.zeros(len(l), 128)
+
+for i, letter in enumerate(l.lower().strip()):
+    letter_index = ord(letter) if ord(letter) < 128 else 0
+    letter_t[i][letter_index] = 1
+
+print(letter_t)
+
 '''
-安装包
-
-pip install jieba text2vec gensim
-
-下载词向量
-https://modelscope.cn/models/lili666/text2vec-word2vec-tencent-chinese/summary
-
-下载文件放在 --> 
-* data/p1ch4/light_Tencent_AILab_ChineseEmbedding.bin
-
-Word2vec 算法演示
-https://ronxin.github.io/wevi/
+问题：对于将文本处理为张量？onehot 有缺点：
+* 稀疏矩阵
+* 只有 0，1，非常的消耗空间
+* 不能通过 cosin 距离，得到两个词之间的语义相似度
 '''
 
-import jieba
-
-# https://pypi.org/project/text2vec/
-# https://github.com/shibing624/text2vec/blob/master/text2vec/word2vec.py
-from text2vec import Word2Vec
+# 什么叫做 cosin 距离？
+# 不同的两个向量，在空间中的夹角 \theta 的 cosin 值代表相似度
+# 特点：如果一个向量，是可以通过伸缩成为另一个向量，那么两个相似度就是 1；如果两个向量是垂直的，那么相似度就是 0
 
 
-def compute_emb(model):
-    # Embed a list of sentences
-    sentences = [
-        '卡',
-        '银行卡',
-        '如何更换花呗绑定银行卡',
-        '花呗更改绑定银行卡',
-        'This framework generates embeddings for each input sentence',
-        'Sentences are passed as a list of string.',
-        'The quick brown fox jumps over the lazy dog.',
-        '敏捷的棕色狐狸跳过了懒狗',
-    ]
-    sentence_embeddings = model.encode(
-        sentences, show_progress_bar=True, normalize_embeddings=True)
-    print(type(sentence_embeddings), sentence_embeddings.shape)
+import torch
+from torch import nn
+cos = nn.CosineSimilarity(dim=-1, eps=1e-6)
 
-    # The result is a list of sentence embeddings as numpy arrays
-    for sentence, embedding in zip(sentences, sentence_embeddings):
-        print("Sentence:", sentence)
-        print("Embedding shape:", embedding.shape)
-        print("Embedding head:", embedding[:10])
-        print()
+input1 = torch.tensor([1, 0]).float()  # 苹果
+input2 = torch.tensor([0.5, 1]).float()  # 橘子
 
-
-if __name__ == "__main__":
-    # 中文词向量模型(word2vec)，中文字面匹配任务和冷启动适用
-    w2v_model = Word2Vec(
-        "./data/p1ch4/light_Tencent_AILab_ChineseEmbedding.bin", {
-            "binary": True
-        })
-
-    # 打印描述
-    print(str(w2v_model))
-    print("*" * 80)
-
-    # 将单词转化为向量
-    w = "银行"
-    w_emb = w2v_model.encode(w)
-    print("w_emb type", type(w_emb))
-    print("w_emb shape", w_emb.shape)
-
-    # 将句子转化为向量
-    compute_emb(w2v_model)
+# ~ 0.5
+output = cos(input1, input2)
+print(output)
