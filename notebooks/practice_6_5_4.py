@@ -96,6 +96,15 @@ train_dataloader = torch.utils.data.DataLoader([(x, y) for x, y in zip(train_dat
 
 total_step = 0
 total_loss = 0
+
+'''
+模式3：将整体的数据集，分解成小的数据集，然后每个小数据集进行预测，计算损失，进行参数更新。
+
+* 在每个 epoch 执行之前，要对小数据集进行重新的划分
+
+SGD
+
+'''
 for i in range(epoches):
     total_loss = 0
     # TODO 进一步的说明小批量随机梯度下降

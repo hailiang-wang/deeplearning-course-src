@@ -85,6 +85,12 @@ lr = 1e-3
 opt = torch.optim.SGD(model.parameters(), lr=lr)
 loss_fn = torch.nn.NLLLoss()
 
+'''
+模式1：每个 epoch 使用全部数据，进行 loss 的计算，然后更新参数一次
+特点：loss 是对所有的样本X累计计算出来
+
+批量梯度下降 (BGD), 逃离局部最优能力较差（容易困在鞍点或局部极小值）
+'''
 for i in range(epoches):
     opt.zero_grad()
     y_p = model(train_data_x)
@@ -99,10 +105,30 @@ for i in range(epoches):
 
     print("Epoch %s train/loss %.4f" % (i, loss))
 
+
+'''
+模式2：每个 epoch 使用每一条数据，进行 loss 的计算，然后更新参数多次
+特点：loss 是对所有的每个X单独计算出来
+
+随机梯度下降 (SGD)
+'''
+# for i in range(epoches):
+#     total_loss = 0
+#     for j, x in enumerate(train_data_x):
+#         x = x.unsqueeze(dim=0)
+#         y_p = model(x)
+#         label = train_data_y[j].argmax(dim=1).long()
+#         loss = loss_fn(y_p, label)
+#         opt.zero_grad()
+#         loss.backward()
+#         opt.step()
+#         total_loss += loss.item()
+
+#     print("Epoch %s train/loss %.4f" % (i, total_loss))
+
 '''
 在验证集上预测
 '''
-
 target_predict = model(valid_data_x)
 # 转化为分类
 q = torch.argmax(target_predict, dim=-1)

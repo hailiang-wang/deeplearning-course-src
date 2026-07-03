@@ -1,130 +1,84 @@
-import numpy as np
+'''
+绘图参考：assets/梯度下降_理解.pdf
+'''
+
 import torch
 
-torch.set_printoptions(edgeitems=2, linewidth=75)
+torch.set_printoptions(edgeitems=2, threshold=30)
 
 ###########################
-# 给出位置单位的温度计的温度，让模型告诉我们，对应的摄氏温度是多少？
+# 给出未知单位的温度计的温度，让模型告诉我们，对应的摄氏温度是多少？
 ###########################
 
-# X: 采集到的位置单位的温度
+# X: 采集到的未知单位的刻度
 t_u = [35.7, 55.9, 58.2, 81.9, 56.3, 48.9, 33.9, 21.8, 48.4, 60.4, 68.4]
 
 # Y: 对应的摄氏度，目标计算的值
 t_c = [0.5, 14.0, 15.0, 28.0, 11.0, 8.0, 3.0, -4.0, 6.0, 13.0, 21.0]
 
-t_c = torch.tensor(t_c)
-t_u = torch.tensor(t_u)
+t_u = torch.tensor(t_u, dtype=torch.float32) * 0.1
+t_c = torch.tensor(t_c, dtype=torch.float32)
 
 
 def model(x, w, b):
-    '''
-    模型，有两个参数，线性回归
-    '''
     return (w * x) + b
 
 
-def loss_fn(t_p, t_c):  # p --> predict
-    '''
-    损失函数，计算理想输出和实际输出的差异: 返回一个数值
-    t_p 和 t_c 都是向量，代表多个样本
-    '''
-    squared_diffs = (t_p - t_c)**2  # 所有样本的损失的向量
+def loss_fn(t_p, t_c):
+    squared_diffs = (t_p - t_c)**2
     return squared_diffs.mean()
 
 
-w = torch.ones(())  # tensor: scalar(数值, 1.0)， vector ([1,2]), matrix([[1,2], [3,4]]), ....
-b = torch.zeros(())
-
-t_p = model(t_u, w, b)
-
-print(t_p)
-# tensor([35.7000, 55.9000, 58.2000, 81.9000, 56.3000, 48.9000, 33.9000,
-#        21.8000, 48.4000, 60.4000, 68.4000])
-
-loss = loss_fn(t_p, t_c)
-print("Loss,", loss)
-
-###############################
-# 思考：如何更新 w 和 b, 然后，保证下一次的运算，loss 可以更小？
-# 两个核心的算法：梯度下降，反向传播
-###############################
-
-# 1.手动演算的过程
-# delta = 0.1
-
-# loss_rate_change_w = (loss_fn(model(t_u, w + delta, b), t_c) - loss_fn(model(t_u, w - delta, b), t_c)) / (2 * delta)
-
-# loss_rate_change_b = (loss_fn(model(t_u, w, b + delta), t_c) - loss_fn(model(t_u, w, b - delta), t_c)) / (2 * delta)
+'''
+人为的选择两个直线，进行比较
+'''
 
 
-# print(loss_rate_change_w)
+# # 直线2
+# w2 = 10.0
+# b2 = 20.0
+# t_p2 = model(t_u, w2, b2)
+# print("Loss 2", loss_fn(t_p2, t_c))
 
-# learning_rate = 1e-2
+# 随机初始化的 w, b
+w1 = 1.0
+b1 = 10.0
+t_p1 = model(t_u, w1, b1)
+loss1 = loss_fn(t_p1, t_c)
+print("Loss 1", loss1)
 
-# w = w - loss_rate_change_w * learning_rate
-# b = b - loss_rate_change_b * learning_rate
+# 当我们得到损失以后, 下一步，该怎么改变w， b，以使得 loss 变小呢?
+# 比如，在分析这个问题的时候，我们先固定 b，让 w 变化
+# 得到了一个曲线
 
+delta_w = 1e-5
+learning_rate = 1e-3
 
-# 2. 让变化率无限小，无限逼近 0，那么就是导数
-# 含有多个参数，每个参数的导数值，构成的向量，就是梯度
-# 沿着梯度下降的方向，可以让 loss 函数降低：是因为，我们选择的 loss 损失函数，有凸函数的性质，即连续可导的凸函数，在导数等于 0 的时候，到达极值点
+w2 = w1 + delta_w
+w3 = w1 - delta_w
 
-def dloss_fn(t_p, t_c):
-    dsq_diffs = 2 * (t_p - t_c) / t_p.size(0)
-    return dsq_diffs
+# 我们想了解，在 delta w 的变化上，对 loss 的影响：也就是 loss 的辩护率，是什么样的？
 
-# dloss_fn 是关于loss 函数和输入 t_p 之间的导数，而我们需要的是 loss 和 (w,b) 之间的导数，
-# 而 t_p 和 w,b 之间是通过 model(w*x + b) 实现的，进而，通过链式法则：关于 dloss_fn, 和 model(w*x + b) 就可以求出 loss 和 (w,b) 之间的导数
+loss_w2 = loss_fn(model(t_u, w2, b1), t_c)
+loss_w3 = loss_fn(model(t_u, w3, b1), t_c)
 
+# change_rate = (loss_w2 - loss_w3) / (w2 - w3)
+change_rate = (loss_w2 - loss_w3) / (2 * delta_w)
 
-def dmodel_dw(t_u, w, b):
-    return t_u
+# 启发1：如果 change rate（loss 函数的变化率）是大于 0 的，那么，w 就向左侧更新 delta_w，就可以保证更新后的 w 和 b 的损失loss 是降低的！
+if change_rate > 0:
+    w1 = w1 - delta_w
+elif change_rate < 0:
+    # 启发2：如果 change rate 小于 0，那么 w 应该向右侧移动 delta_w
+    w1 = w1 + delta_w
+else:
+    # change_rate = 0
+    pass
 
+# change_rate ?
+# 当 delta --> 0，也就是 delta_w 无限的接近 0，那么 change_rate 就是导数!
+# 不管是启发1还是启发2，那么 w1 更新的方向，都是可以用下面表达式表达：
+w1 = w1 - (change_rate * learning_rate)
+# b1 = b1 - (change_rate_b)  # 使用上述 delta，在求解一个 change_rate_b
 
-def dmodel_db(t_u, w, b):
-    return 1.0
-
-
-def grad_fn(t_u, t_c, t_p, w, b):
-    dloss_dtp = dloss_fn(t_p, t_c)
-    dloss_dw = dloss_dtp * dmodel_dw(t_u, w, b)
-    dloss_db = dloss_dtp * dmodel_db(t_u, w, b)
-
-    return torch.stack([dloss_dw.sum(), dloss_db.sum()])
-
-
-# 开始训练，使用自动学习参数的机制：应用梯度求解变化率，多轮的更新
-learning_rate = 1e-4
-epochs = 100000
-
-for epoch in range(1, epochs + 1):
-    t_p = model(t_u, w, b)
-    loss = loss_fn(t_p=t_p, t_c=t_c)
-
-    grad = grad_fn(t_u, t_c, t_p, w, b)
-
-    w = w - (learning_rate * grad[0])
-    b = b - (learning_rate * grad[1])
-
-    print('Epoch %d, Loss %f' % (epoch, float(loss)))  # <3>
-
-    if not torch.isfinite(loss).all():
-        break
-
-print("Result:")
-print(w)
-print(b)
-
-from matplotlib import pyplot as plt
-
-t_p = model(t_u, w, b)  # <1>
-
-fig = plt.figure(dpi=600)
-plt.xlabel("Temperature (°Fahrenheit)")
-plt.ylabel("Temperature (°Celsius)")
-plt.plot(t_u.numpy(), t_p.detach().numpy())  # <2>
-plt.plot(t_u.numpy(), t_c.numpy(), 'o')
-plt.savefig("temp_unknown_plot.png", format="png")
-
-plt.show()
+# 重复上面的过程，直到 loss 不再变化，学习就停止了
