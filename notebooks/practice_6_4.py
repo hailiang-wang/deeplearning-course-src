@@ -5,8 +5,14 @@ import torch
 import torch.optim as optimizer
 import torch.nn as nn
 import sys
+'''
+控制台执行：
+pip install torchinfo
+'''
+from torchinfo import summary
 
 torch.set_printoptions(edgeitems=2, threshold=30)
+
 
 '''
 机器学习的训练，分成两个阶段：
@@ -56,21 +62,41 @@ valid_data_y = t_c[valid_indices]
 '''
 构建训练的模型
 '''
-# 使用 nn module 构建了一个全连接的一个隐含层的神经网络
-model = nn.Sequential(nn.Linear(1, 13),
-                      nn.ReLU(),
-                      nn.Linear(13, 1))
 
-for param in model.parameters():
-    # https://docs.pytorch.org/docs/2.12/generated/torch.nn.Linear.html
-    # model = nn.Linear(3, 4)
-    # A 4x3, b 1x4
-    print(param)
+# 使用 nn module 构建了一个全连接的一个隐含层的神经网络
+from collections import OrderedDict
+model = nn.Sequential(OrderedDict([
+    ('hidden_linear', nn.Linear(1, 13)),
+    ('hidden_activation', nn.ReLU()),
+    ('output_layer', nn.Linear(13, 1))
+]))
+
+print(model)
+
+'''
+使用 named parameters 计算参数总量
+'''
+# total_params = 0
+# for name, param in model.named_parameters():
+#     print(name, param.shape)
+#     total_params += param.numel()
+
+# print("Total params ", total_params)
+
+'''
+使用 named parameters 去查看 参数
+'''
+print("weight params of hidden layer", model.hidden_linear.weight)
+print("bias params of hidden layer", model.hidden_linear.bias)
 
 
 # def loss_fn(t_p: torch.Tensor, t_c: torch.Tensor):
 #     t_p = t_p.squeeze(dim=1)
 #     return ((t_p - t_c)**2).mean()
+'''
+在 PyTorch 中，包含的常用的损失函数：
+https://zhuanlan.zhihu.com/p/666303929
+'''
 loss_fn = nn.MSELoss()
 
 
@@ -96,10 +122,10 @@ for epoch in range(1, EPOCH + 1):
     if not torch.isfinite(loss).all():
         break
 
-    # if epoch % 100 == 0:
-    #     with torch.no_grad():
-    #         valid_loss = loss_fn(model(valid_data_x), valid_data_y.unsqueeze(dim=1))
-    #         print("Epoch %s valid/loss %.4f" % (epoch, valid_loss.item()))
+    if epoch % 100 == 0:
+        with torch.no_grad():
+            valid_loss = loss_fn(model(valid_data_x), valid_data_y.unsqueeze(dim=1))
+            print("Epoch %s valid/loss %.4f" % (epoch, valid_loss.item()))
 
 print("*" * 100)
 for param in model.parameters():
