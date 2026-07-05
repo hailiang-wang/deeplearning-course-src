@@ -1,6 +1,7 @@
 #############################################
-# 本节重点：使用 Tensorboard
-# tensorboard.exe --logdir ./runs/
+# 本节重点：在 Tensorboard 中，添加更多指标
+# 先介绍混淆矩阵，查准率，查全率
+# https://zhuanlan.zhihu.com/p/2036748509299397815
 #############################################
 import torch
 from matplotlib import pyplot as plt
