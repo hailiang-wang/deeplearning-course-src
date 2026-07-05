@@ -1,8 +1,15 @@
 '''
-自动求导
+优化器
 '''
 import numpy as np
 import torch
+from torch import optim
+import random
+
+torch.manual_seed(100)
+np.random.seed(100)
+random.seed(100)
+
 torch.set_printoptions(edgeitems=2, linewidth=75)
 
 t_c = [0.5, 14.0, 15.0, 28.0, 11.0, 8.0, 3.0, -4.0, 6.0, 13.0, 21.0]
@@ -20,9 +27,7 @@ def loss_fn(t_p, t_c):
     return squared_diffs.mean()  # 返回值是一个张量
 
 
-params = torch.tensor([1.0, 0.0], requires_grad=True)
-if params.grad is None:
-    print("Params is None after init.")
+params = torch.randn((2), requires_grad=True)
 
 
 # loss = loss_fn(model(t_u, *params), t_c)
@@ -42,22 +47,47 @@ https://zhuanlan.zhihu.com/p/2027423168176899509
 '''
 
 epoch = 10000
-lr = 1e-2
+lr = 1e-3
+opt = optim.SGD(params=[params], lr=lr)
+# optim.Adam(params=[params], lr=lr)
+# opt = optim.Adam(params=[params], lr=lr)
+
+
+# early stop: 在没有达到设定的迭代 Epoch 的情况下，loss 已经不变化了，那么就停止学习
+# loss 不变化的条件，是在一定的轮数的计算过程中
+early_stop = 50
+loss_stop_ct = 0
+latest_loss = 0
 
 for i in range(epoch):
     t_p = model(t_u, *params)
 
-    if params.grad is not None:
-        params.grad.zero_()
+    opt.zero_grad()
     loss = loss_fn(t_p, t_c)
     print("Epcho %s, loss %.5f" % (i, loss.item()))
 
     loss.backward()
 
     with torch.no_grad():
-        # params[0] -= (lr * params.grad[0])
-        # params[1] -= (lr * params.grad[1])
-        params -= (lr) * params.grad
+        opt.step()
+
+    if latest_loss == 0:
+        latest_loss = loss.item()
+
+    # print("Current latest_loss", latest_loss)
+
+    loss_diff = abs((loss.item() - latest_loss))
+    if (loss_diff / latest_loss) < 1e-5:
+        loss_stop_ct += 1
+    else:
+        loss_stop_ct = 0
+
+    if loss_stop_ct >= early_stop:
+        print("Learning stopped at epoch %s" % (i - early_stop - 1))
+        break
+
+    latest_loss = loss.item()
+
 
 print("Final result w: %s, b: %s" % (params[0].item(), params[1].item()))
 
@@ -73,3 +103,5 @@ plt.ylabel("Temperature (°Celsius)")
 plt.plot(t_u.numpy(), t_p.detach().numpy())  # <2>
 plt.plot(t_u.numpy(), t_c.numpy(), 'o')
 plt.savefig("temp_unknown_plot.png", format="png")  # bookskip
+
+plt.show()
