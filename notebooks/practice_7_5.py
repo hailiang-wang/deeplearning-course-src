@@ -1,8 +1,14 @@
 '''
 使用 torchvision 进行图片的变换
 
+## 官方文档
+
 torchvision==0.25.0+cpu
 https://docs.pytorch.org/vision/0.22/transforms.html
+
+## 使用介绍
+https://zhuanlan.zhihu.com/p/2084218976
+
 '''
 
 # Image Classification
@@ -60,7 +66,10 @@ plt.savefig("tmp_7_5_post.png", format="png")
 '''
 练习题：
 
-调整 practice_7_3.py 代码，使用 torchvision 进行图片数据增强
+调整 practice_7_3.py 代码，使用 torchvision 进行图片数据增强：
+1）对飞机和小鸟的图片，每张图片各生成 5 张新的图片，比如使用随机缩放并剪切的方式生成一张，采用 RandomAffine 生成一张等
+2）生成后，每张新的图片还是 3x32x32
+
 然后，进行模型的训练。
 分析模型的准确率变化了吗？是提升了，还是减小了？
 '''

@@ -36,6 +36,20 @@ data_path = "data-unversioned/p1ch7/"
 # plt.show()
 
 '''
+本章练习题：数据增强
+参考：practice_7_5.py
+'''
+# 1）加载数据
+# 2）将飞机和鸟类过滤出来
+# 3）进行分类： cifar2, cifar2_vali --> 进行数据规范化 单位标准差
+# 4) 对 cifar2 进行数据增强，等到新的 cifar2_transformed
+# 5）使用 cifar2_transformed 进行模型训练，使用 cifar2_vali 进行模型的评测
+
+# cifar10 = datasets.CIFAR10(data_path, train=True, download=False) ...
+
+
+
+'''
 数据的规范化：单位标准差
 '''
 from torchvision import transforms
