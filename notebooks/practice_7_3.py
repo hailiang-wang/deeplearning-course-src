@@ -71,7 +71,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 n_out = 2
-lr = 1e-3
+lr = 1e-1
 epoches = 10
 batch_size = 10
 

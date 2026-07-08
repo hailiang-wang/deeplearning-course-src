@@ -79,7 +79,7 @@ import torch.nn.functional as F
 batch_size = 20
 n_epoches = 10
 learning_rate = 1e-3
-n_blocks = 10
+n_blocks = 2
 n_out = 2  # 希望神经的输出，是一个含有两个元素的向量，
 # 比如 [0.9, 0.1]，然后约定，数值较大的索引，就是分类标签，比如 0.9 的索引是 0, 0.1 的索引是 1，那么，前面的向量代表图片属于分类 0
 
