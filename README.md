@@ -30,6 +30,8 @@ scripts/pip_install.sh torchinfo pandas numpy matplotlib
 * GPU Machine
 
 ```
+./scripts/install_deps.sh torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu
+126 
 scripts/pip_install.sh torchinfo pandas numpy matplotlib
 ```
 
