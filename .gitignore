@@ -48,3 +48,4 @@ assets/backup/
 notebooks/data-unversioned/p1ch6/cifar-10-python.tar.gz
 notebooks/data/p1ch4/light_Tencent_AILab_ChineseEmbedding.bin
 runs/
+*.geany

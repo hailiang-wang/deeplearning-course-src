@@ -89,6 +89,8 @@ lr = 1e-1
 epoches = 10
 batch_size = 10
 
+# 3072? = 3x32x32 <-- 1D
+# 图片是一个 2D 
 model = nn.Sequential(
     nn.Linear(3072, 64),
     nn.Tanh(),
@@ -120,7 +122,7 @@ for epcho in range(epoches):
     for imgs, labels in train_data:
         # print(imgs.shape)  # torch.Size([50, 3, 32, 32])
         # print(labels.shape)  # torch.Size([50])
-        imgs = imgs.view(imgs.shape[0], -1)
+        imgs = imgs.view(imgs.shape[0], -1) # 把2D 数据，展平到了 1D 的空间
         # print("imgs shape", imgs.shape)
         # imgs shape torch.Size([50, 3072])
         outputs = model(imgs)
