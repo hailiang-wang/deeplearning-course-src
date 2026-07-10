@@ -1,14 +1,16 @@
 # 深度学习课程 项目代码
 
+Get started with Deep Learning using PyTorch.
+
 https://gitee.com/hailiang-wang/deeplearning-course-src
 
-Get started with Deep Learning using PyTorch.
+OR [GitHub](https://github.com/hailiang-wang/deeplearning-course-src).
 
 # 教材
 
 https://gitee.com/hlcap/books.tech/tree/master/AI
 
-Pytorch深度学习实战.pdf
+* 首选： Pytorch深度学习实战.pdf
 
 # 运行代码
 
