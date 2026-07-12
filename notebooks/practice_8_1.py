@@ -1,4 +1,6 @@
 '''
+实现一个卷积运算，对图片进行操作
+
 Image processing 
 https://en.wikipedia.org/wiki/Kernel_(image_processing)
 
@@ -10,97 +12,93 @@ https://medium.com/@whyamit404/a-practical-guide-on-numpy-permute-22b72b4b7727
 
 '''
 
+import sys
 from PIL import Image
 import numpy as np
 
 data_path = "data/p1ch8/original.png"
+img_original = Image.open(data_path)
+img = np.asarray(img_original)
 
-img = Image.open(data_path)
-img_ndarray = np.asarray(img)
+img = np.transpose(img, (2, 0, 1))
+print(img.shape)
 
-img_t = np.transpose(img_ndarray, (2, 1, 0))
-
-# print(img_t.shape)
-
-# Define the convolution function
-def convolution2d(input_matrix, kernel):
-    # Get dimensions of input and kernel
-    input_h, input_w = input_matrix.shape
-    kernel_h, kernel_w = kernel.shape
-
-    # Calculate the size of the output matrix
-    output_h = input_h - kernel_h + 1
-    output_w = input_w - kernel_w + 1
-
-    # Create an empty output matrix
-    output = np.zeros((output_h, output_w))
-
-    # Perform the convolution operation
-    for i in range(output_h):
-        for j in range(output_w):
-            # Extract the region of the input matrix covered by the kernel
-            region = input_matrix[i:i + kernel_h, j:j + kernel_w]
-
-            # Apply element-wise multiplication and sum the result
-            output[i, j] = np.sum(region * kernel)
-
-    return output
-
-# Add padding logic to the convolution function
-
-
-def convolution2d_with_padding(input_matrix, kernel, padding=0):
-    # Add padding to the input matrix
-    input_padded = np.pad(input_matrix, pad_width=padding, mode='constant', constant_values=0)
-
-    # Call the convolution function with the padded input
-    return convolution2d(input_padded, kernel)
-
-
-########################
-# Define a 3x3 kernels (filter)
-########################
-
-# 边缘检测
+'''
+卷积核
+'''
+# 检测边缘
 kernel1 = np.array([
     [-1, -1, -1],
     [-1, 8, -1],
-    [-1, -1, -1]
+    [-1, -1, -1],
 ])
 
+# 高斯模糊
 kernel2 = np.array([
-    [0, -1, 0],
-    [-1, 5, -1],
-    [0, -1, 0]
-])
-
-kernel3 = np.array([
     [1, 2, 1],
     [2, 4, 2],
     [1, 2, 1]
 ]) / 16
 
 
-def process_conv2d_with_kernels(kernels, output_paths):
+'''
+卷积函数
+'''
+
+
+def conv2d(input_matrix, kernel):
     '''
-    同时处理多个卷积核
+    执行卷积
     '''
-    global img_t
-    for kernel, output_path in zip(kernels, output_paths):
-        post_img = np.zeros_like(img_t)
+    input_height, input_width = input_matrix.shape
+    kernel_height, kernel_width = kernel.shape
 
-        for channel in range(img_t.shape[0]):
-            post_img[channel] = convolution2d_with_padding(img_t[channel], kernel, 1)
+    output_height = input_height + - kernel_height + 1
+    output_width = input_width + - kernel_width + 1
 
-        post_img_ndarray = np.transpose(post_img, (2, 1, 0))
-        # print(post_img_ndarray.shape)
+    output = np.zeros((output_height, output_width))
 
-        transformed_image = Image.fromarray(post_img_ndarray)
-        transformed_image.save(output_path)
+    for i in range(output_height):
+        for j in range(output_width):
+            region = input_matrix[i:i + kernel_height, j:j + kernel_width]
 
-process_conv2d_with_kernels([kernel1,
-                             kernel2,
-                             kernel3],
-                            ["data/p1ch8/kernel1.png",
-                             "data/p1ch8/kernel2.png",
-                             "data/p1ch8/kernel3.png"])
+            output[i, j] = np.sum(region * kernel)
+
+    return output
+
+
+def conv2d_with_padding(input_matrix, kernel, padding=1):
+    '''
+    对矩阵进行卷积运算，支持 padding
+    '''
+    matrix_padded = np.pad(input_matrix, pad_width=padding, mode="constant", constant_values=0)
+
+    return conv2d(matrix_padded, kernel)
+
+
+'''
+测试卷积
+'''
+
+
+def process_imgs(img_array, kernels):
+    '''
+    针对图片 img，进行多次卷积运算
+    '''
+    for (k, out) in kernels:
+        post_conv2d_img = np.zeros_like(img_array)
+
+        for channel in range(img_array.shape[0]):
+            post_conv2d_img[channel] = conv2d_with_padding(img_array[channel], k, padding=1)
+
+        post_conv2d_img = np.transpose(post_conv2d_img, (1, 2, 0))
+        # print("post_conv2d_img shape", post_conv2d_img.shape)
+
+        post_img = Image.fromarray(post_conv2d_img)
+        post_img.save(out)
+
+
+process_imgs(img, [
+    (kernel1, "data/p1ch8/post_kernel1.png"),
+    (kernel2, "data/p1ch8/post_kernel2.png"),
+])
