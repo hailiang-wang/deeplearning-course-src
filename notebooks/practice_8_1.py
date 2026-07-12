@@ -62,7 +62,7 @@ def conv2d(input_matrix, kernel):
         for j in range(output_width):
             region = input_matrix[i:i + kernel_height, j:j + kernel_width]
 
-            output[i, j] = np.sum(region * kernel)
+            output[i, j] = max(min(np.sum(region * kernel), 255), 0)
 
     return output
 
