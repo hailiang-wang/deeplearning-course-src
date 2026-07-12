@@ -1,5 +1,8 @@
 #############################################
 # 在 practice_8_3.py 基础上，增加卷基层输出通道，扩大模型
+# CNN 参数数量计算
+# https://www.zhihu.com/question/492240592/answer/2031675097090627515
+# https://zhuanlan.zhihu.com/p/395354063
 #############################################
 import torch
 from matplotlib import pyplot as plt
