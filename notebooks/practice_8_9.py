@@ -1,6 +1,5 @@
 #############################################
-# 本节重点：使用 Tensorboard
-# tensorboard.exe --logdir ./runs/
+# 使用 ReLU 激活函数
 #############################################
 import torch
 from matplotlib import pyplot as plt

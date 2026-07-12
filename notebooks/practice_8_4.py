@@ -1,6 +1,5 @@
 #############################################
-# 本节重点：使用 Tensorboard
-# tensorboard.exe --logdir ./runs/
+# 在 practice_8_3.py 基础上，增加卷基层输出通道，扩大模型
 #############################################
 import torch
 from matplotlib import pyplot as plt

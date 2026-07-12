@@ -1,6 +1,5 @@
 #############################################
-# 本节重点：使用 Tensorboard
-# tensorboard.exe --logdir ./runs/
+# 使用 L2 norm 来规范化参数更新
 #############################################
 import torch
 from matplotlib import pyplot as plt

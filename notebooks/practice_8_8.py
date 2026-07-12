@@ -1,6 +1,7 @@
 #############################################
-# 本节重点：使用 Tensorboard
-# tensorboard.exe --logdir ./runs/
+# 进行 Batch Norm
+# https://zhuanlan.zhihu.com/p/403073810
+# https://zhuanlan.zhihu.com/p/2045435672316600766
 #############################################
 import torch
 from matplotlib import pyplot as plt

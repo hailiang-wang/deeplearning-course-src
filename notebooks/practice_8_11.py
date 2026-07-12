@@ -1,6 +1,5 @@
 #############################################
-# 本节重点：使用 Tensorboard
-# tensorboard.exe --logdir ./runs/
+# 使用 AlexNet
 #############################################
 import torch
 from matplotlib import pyplot as plt

@@ -1,6 +1,6 @@
 #############################################
-# 本节重点：使用 Tensorboard
-# tensorboard.exe --logdir ./runs/
+# 在 practice_8_4.py 的基础上，进一步的扩大模型，并引入超参数自定计算
+# 卷基层参数
 #############################################
 import torch
 from matplotlib import pyplot as plt

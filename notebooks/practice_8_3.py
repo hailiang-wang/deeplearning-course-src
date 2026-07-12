@@ -1,6 +1,5 @@
 #############################################
-# 本节重点：使用 Tensorboard
-# tensorboard.exe --logdir ./runs/
+# 使用 nn conv2d + nn.Module 类的形式，定义卷积神经网络
 #############################################
 import torch
 from matplotlib import pyplot as plt
