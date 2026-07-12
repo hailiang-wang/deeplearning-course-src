@@ -36,17 +36,15 @@ from torchvision import transforms
 ################################
 # 数据的规范化
 # 比如，使用 单位标准差 方法
-# https://zhuanlan.zhihu.com/p/2028540638145062215
+# https://zhuanlan.zhihu.com/p/2028540638145062215n_blocks
 ################################
 cifar10 = datasets.CIFAR10(data_path, train=True, download=False, transform=transforms.Compose([
-    transforms.Resize((227, 227)),
     transforms.ToTensor(),
     transforms.Normalize((0.4915, 0.4823, 0.4468),  # imagenet, 超過 100　万张图片上，做的统计后得到的 RGB 三个通道的均值和标准差
                          (0.2470, 0.2435, 0.2616))
 ]))
 
 cifar10_val = datasets.CIFAR10(data_path, train=False, download=False, transform=transforms.Compose([
-    transforms.Resize((227, 227)),
     transforms.ToTensor(),
     transforms.Normalize((0.4915, 0.4823, 0.4468),  # imagenet, 超過 100　万张图片上，做的统计后得到的 RGB 三个通道的均值和标准差
                          (0.2470, 0.2435, 0.2616))
@@ -84,68 +82,61 @@ n_out = 2  # 希望神经的输出，是一个含有两个元素的向量，
 # 比如 [0.9, 0.1]，然后约定，数值较大的索引，就是分类标签，比如 0.9 的索引是 0, 0.1 的索引是 1，那么，前面的向量代表图片属于分类 0
 
 
-class AlexNet(nn.Module):
+class ResBlock(nn.Module):
+    '''
+    深度残差网络
+    支持自定义深度
+    '''
 
-    def __init__(self):
-        super(AlexNet, self).__init__()
-        # (227 - 11)//4 + 1
-        self.layer1 = nn.Sequential(
-            nn.Conv2d(3, 96, kernel_size=11, stride=4, padding=0),
-            nn.BatchNorm2d(96),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=3, stride=2)
+    def __init__(self, n_chans):
+        super(ResBlock, self).__init__()
+        self.conv = nn.Conv2d(
+            n_chans, n_chans, kernel_size=3, padding=1, bias=False)
+        self.batch_norm = nn.BatchNorm2d(num_features=n_chans)
+        torch.nn.init.kaiming_normal_(self.conv.weight, nonlinearity='relu')
+        torch.nn.init.zeros_(self.batch_norm.bias)
+
+    def forward(self, x):
+        out = self.conv(x)
+        out = self.batch_norm(out)
+        out = torch.relu(out)
+
+        return out + x
+
+
+class DeepResNet(nn.Module):
+    '''
+    A convolution neural network
+    '''
+
+    def __init__(self, n_blocks=10):
+        super().__init__()
+        self.conv1 = nn.Conv2d(3, 32, padding=1, kernel_size=3, stride=1)
+
+        # 深度残差的堆叠
+        # * 是参数解包，args unpacking
+        self.resblocks = nn.Sequential(
+            *(n_blocks * [ResBlock(n_chans=32)])
         )
-        self.layer2 = nn.Sequential(
-            nn.Conv2d(96, 256, kernel_size=5, stride=1, padding=2),
-            nn.BatchNorm2d(num_features=256),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=3, stride=2)
-        )
-        self.layer3 = nn.Sequential(
-            nn.Conv2d(256, 384, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(num_features=384),
-            nn.ReLU(),
-        )
-        self.layer4 = nn.Sequential(
-            nn.Conv2d(384, 384, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(num_features=384),
-            nn.ReLU(),
-        )
-        self.layer5 = nn.Sequential(
-            nn.Conv2d(384, 256, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(num_features=256),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=3, stride=2)
-        )
-        self.fc = nn.Sequential(
-            nn.Dropout(0.5),
-            nn.Linear(9216, 4096),
-            nn.ReLU()
-        )
-        self.fc1 = nn.Sequential(
-            nn.Dropout(0.5),
-            nn.Linear(4096, 4096),
-            nn.ReLU()
-        )
-        self.fc2 = nn.Linear(4096, n_out)
+
+        self.fc1 = nn.Linear(32 * 8 * 8, 32)
+        self.fc2 = nn.Linear(32, 2)
         self.softmax = nn.LogSoftmax(dim=1)
 
     def forward(self, x):
-        out = self.layer1(x)
-        out = self.layer2(out)
-        out = self.layer3(out)
-        out = self.layer4(out)
-        out = self.layer5(out)
-        out = out.reshape(out.size(0), -1)
-        out = self.fc(out)
-        out = self.fc1(out)
+        out = F.max_pool2d(torch.relu(self.conv1(x)), 2)
+        out = self.resblocks(out)
+        out = F.max_pool2d(out, 2)
+        # 使用 -1 自动计算 batch 大小
+        out = out.view(-1, 32 * 8 * 8)
+        out = torch.relu(self.fc1(out))
         out = self.fc2(out)
         out = self.softmax(out)
 
         return out
 
 
-model = AlexNet()
+model = DeepResNet(n_blocks=100)
 summary(model=model)
 
 

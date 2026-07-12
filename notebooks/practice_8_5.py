@@ -76,9 +76,8 @@ import torch.nn.functional as F
 
 batch_size = 20
 n_epoches = 10
-n_channels = 32
+n_channels = 128
 learning_rate = 1e-4
-l2_lambda = 1e-3
 n_out = 2  # 希望神经的输出，是一个含有两个元素的向量，
 # 比如 [0.9, 0.1]，然后约定，数值较大的索引，就是分类标签，比如 0.9 的索引是 0, 0.1 的索引是 1，那么，前面的向量代表图片属于分类 0
 
@@ -148,9 +147,6 @@ if __name__ == "__main__":
             # outputs = model(imgs.view(imgs.shape[0], -1))
             outputs = model(imgs)
             loss = loss_fn(outputs, labels)
-
-            l2_norm = sum([p.pow(2.0).sum() for p in model.parameters()])
-            loss = loss + l2_lambda * l2_norm
 
             opt.zero_grad()
             loss.backward()

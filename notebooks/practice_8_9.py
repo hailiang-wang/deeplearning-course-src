@@ -36,7 +36,7 @@ from torchvision import transforms
 ################################
 # 数据的规范化
 # 比如，使用 单位标准差 方法
-# https://zhuanlan.zhihu.com/p/2028540638145062215n_blocks
+# https://zhuanlan.zhihu.com/p/2028540638145062215
 ################################
 cifar10 = datasets.CIFAR10(data_path, train=True, download=False, transform=transforms.Compose([
     transforms.ToTensor(),
@@ -77,55 +77,27 @@ import torch.nn.functional as F
 batch_size = 20
 n_epoches = 10
 learning_rate = 1e-3
-n_blocks = 2
 n_out = 2  # 希望神经的输出，是一个含有两个元素的向量，
 # 比如 [0.9, 0.1]，然后约定，数值较大的索引，就是分类标签，比如 0.9 的索引是 0, 0.1 的索引是 1，那么，前面的向量代表图片属于分类 0
 
 
-class ResBlock(nn.Module):
-    '''
-    深度残差网络
-    支持自定义深度
-    '''
-
-    def __init__(self, n_chans):
-        super(ResBlock, self).__init__()
-        self.conv = nn.Conv2d(
-            n_chans, n_chans, kernel_size=3, padding=1, bias=False)
-        self.batch_norm = nn.BatchNorm2d(num_features=n_chans)
-        torch.nn.init.kaiming_normal_(self.conv.weight, nonlinearity='relu')
-        torch.nn.init.zeros_(self.batch_norm.bias)
-
-    def forward(self, x):
-        out = self.conv(x)
-        out = self.batch_norm(out)
-        out = torch.relu(out)
-
-        return out + x
-
-
-class DeepResNet(nn.Module):
+class Net(nn.Module):
     '''
     A convolution neural network
     '''
 
-    def __init__(self, n_blocks=10):
+    def __init__(self):
         super().__init__()
         self.conv1 = nn.Conv2d(3, 32, padding=1, kernel_size=3, stride=1)
-
-        # 深度残差的堆叠
-        # * 是参数解包，args unpacking
-        self.resblocks = nn.Sequential(
-            *(n_blocks * [ResBlock(n_chans=32)])
-        )
-
+        self.conv2 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
         self.fc1 = nn.Linear(32 * 8 * 8, 32)
         self.fc2 = nn.Linear(32, 2)
         self.softmax = nn.LogSoftmax(dim=1)
 
     def forward(self, x):
         out = F.max_pool2d(torch.relu(self.conv1(x)), 2)
-        out = self.resblocks(out)
+        out1 = out
+        out = torch.relu(self.conv2(out)) + out1
         out = F.max_pool2d(out, 2)
         # 使用 -1 自动计算 batch 大小
         out = out.view(-1, 32 * 8 * 8)
@@ -136,7 +108,7 @@ class DeepResNet(nn.Module):
         return out
 
 
-model = DeepResNet(n_blocks=100)
+model = Net()
 summary(model=model)
 
 

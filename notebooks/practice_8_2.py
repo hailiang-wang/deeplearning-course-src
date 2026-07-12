@@ -6,7 +6,6 @@ import torch
 from matplotlib import pyplot as plt
 from torchvision import datasets
 from torch.utils.tensorboard import SummaryWriter
-from torchinfo import summary
 
 torch.manual_seed(100)
 torch.cuda.manual_seed_all(100)
@@ -72,43 +71,52 @@ validate_labels = torch.tensor([label for (_, label) in cifar2_val])
 # 搭建神经网络
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
 
 batch_size = 20
-n_epoches = 10
+n_epoches = 100
 learning_rate = 1e-3
 n_out = 2  # 希望神经的输出，是一个含有两个元素的向量，
 # 比如 [0.9, 0.1]，然后约定，数值较大的索引，就是分类标签，比如 0.9 的索引是 0, 0.1 的索引是 1，那么，前面的向量代表图片属于分类 0
 
+# model = nn.Sequential(
+#     nn.Linear(3072, 512),  # 3072 = 32*32*3
+#     nn.Tanh(),
+#     nn.Linear(512, 32),
+#     nn.Tanh(),
+#     nn.Linear(32, n_out),
+#     nn.LogSoftmax(dim=1)
+# )
 
-class Net(nn.Module):
-    '''
-    A convolution neural network
-    '''
+model = nn.Sequential(
+    nn.Conv2d(3, 16, kernel_size=3, padding=1, stride=1),
+    # 经过 nn.Conv2d(3, 16, kernel_size=3, padding=1),
+    # 3x32x32 --[3,16]--> 16x((32-3+2) + 1)x((32-3+2) + 1) = 16x32x32
+    nn.Tanh(),
+    # 经过激活函数，shape 没有变化
+    nn.MaxPool2d(2),
+    # 经过 MaxPool
+    # 16x32x32 --[MaxPool 2]--> 16x16x16
 
-    def __init__(self):
-        super().__init__()
-        self.conv1 = nn.Conv2d(3, 16, padding=1, kernel_size=3, stride=1)
-        self.conv2 = nn.Conv2d(16, 8, kernel_size=3, padding=1)
-        self.fc1 = nn.Linear(512, 32)
-        self.fc2 = nn.Linear(32, 2)
-        self.softmax = nn.LogSoftmax(dim=1)
+    nn.Conv2d(16, 8, kernel_size=3, padding=1, stride=1),
+    # 经过 nn.Conv2d(16, 8, kernel_size=3, padding=1),
+    # 16x16x16 --[16, 8]--> 8x((16-3+2) + 1)x((16-3+2) + 1) = 8x16x16
 
-    def forward(self, x):
-        out = F.max_pool2d(torch.tanh(self.conv1(x)), 2)
-        out = F.max_pool2d(torch.tanh(self.conv2(out)), 2)
-        # 使用 -1 自动计算 batch 大小
-        out = out.view(-1, 8 * 8 * 8)
-        out = torch.tanh(self.fc1(out))
-        out = self.fc2(out)
-        out = self.softmax(out)
+    nn.Tanh(),
+    # 经过激活函数，shape 没有变化
 
-        return out
+    nn.MaxPool2d(2),
+    # 经过 MaxPool
+    # 8x16x16 --[MaxPool 2]--> 8x8x8
 
+    nn.Flatten(),
+    # 经过 Flatten
+    # 8x8x8 -[Flatten]-> 512
 
-model = Net()
-summary(model=model)
-
+    nn.Linear(512, 32),
+    nn.Tanh(),
+    nn.Linear(32, 2),
+    nn.LogSoftmax(dim=1)
+)
 
 # 10,2 --> (10/(10+2)), (2/(10+2))
 # 将使用 softmax  = 1 / 1 + e^x

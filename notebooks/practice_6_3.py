@@ -1,5 +1,8 @@
 '''
-使用 NN Loss
+使用全连接神经网络
+
+可视化，从生物神经元到人工神经元
+https://okai.brown.edu/zh/chapter3.html
 '''
 import torch
 import torch.optim as optimizer
