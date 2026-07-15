@@ -1,14 +1,19 @@
 #############################################
-# 使用 L2 norm 来规范化参数更新
+# 在 practice_8_3.py 基础上，增加卷基层输出通道，扩大模型
+# 使用 L2 正则化: https://learningdeeplearning.com/post/l1-and-l2-norms/
 #############################################
+import sys
 import torch
 from matplotlib import pyplot as plt
 from torchvision import datasets
 from torch.utils.tensorboard import SummaryWriter
 from torchinfo import summary
+import numpy as np
+import random
 
 torch.manual_seed(100)
-torch.cuda.manual_seed_all(100)
+np.random.seed(100)
+random.seed(100)
 
 ################################
 # 设置默认的设备，有 GPU 的话，默认使用 GPU
@@ -57,9 +62,11 @@ label_map = {0: 0, 2: 1}
 class_names = ['airplane', 'bird']  # airplane 飞机，的索引是 0, bird 的索引是 1
 # 训练数据
 cifar2 = [(img, label_map[label]) for img, label in cifar10 if label in [0, 2]]
+cifar2 = cifar2[:3000]
 # 验证数据
 cifar2_val = [(img, label_map[label])
               for img, label in cifar10_val if label in [0, 2]]
+cifar2_val = cifar2_val[:500]
 
 print("  Len of cifar2", len(cifar2))
 print("  Len of cifar2_val", len(cifar2_val))
@@ -75,8 +82,7 @@ import torch.nn.functional as F
 
 batch_size = 20
 n_epoches = 10
-n_channels = 32
-learning_rate = 1e-4
+learning_rate = 1e-3
 l2_lambda = 1e-3
 n_out = 2  # 希望神经的输出，是一个含有两个元素的向量，
 # 比如 [0.9, 0.1]，然后约定，数值较大的索引，就是分类标签，比如 0.9 的索引是 0, 0.1 的索引是 1，那么，前面的向量代表图片属于分类 0
@@ -87,28 +93,19 @@ class Net(nn.Module):
     A convolution neural network
     '''
 
-    def __init__(self, n_channels):
+    def __init__(self):
         super().__init__()
-        self.n_channels = n_channels
-        # 输入的图片矩阵大小 3x32x32
-        # 每个卷积层的卷积核大小是 3x3, 左右前后 padding 都是 1，stride 是 1
-        # InputWidth + 2 - 3 + 1 = InputWidth; 高度与此类同
-        self.conv1 = nn.Conv2d(3, n_channels, padding=1,
-                               kernel_size=3, stride=1)
-        self.conv2 = nn.Conv2d(n_channels, n_channels //
-                               2, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(n_channels // 2, n_channels //
-                               2, kernel_size=3, padding=1)
-        self.fc1 = nn.Linear((n_channels // 2) * 4 * 4, 32)
+        self.conv1 = nn.Conv2d(3, 32, padding=1, kernel_size=3, stride=1)
+        self.conv2 = nn.Conv2d(32, 16, kernel_size=3, padding=1)
+        self.fc1 = nn.Linear(16 * 8 * 8, 32)
         self.fc2 = nn.Linear(32, 2)
         self.softmax = nn.LogSoftmax(dim=1)
 
     def forward(self, x):
         out = F.max_pool2d(torch.tanh(self.conv1(x)), 2)
         out = F.max_pool2d(torch.tanh(self.conv2(out)), 2)
-        out = F.max_pool2d(torch.tanh(self.conv3(out)), 2)
         # 使用 -1 自动计算 batch 大小
-        out = out.view(-1, 4 * 4 * (self.n_channels // 2))
+        out = out.view(-1, 16 * 8 * 8)
         out = torch.tanh(self.fc1(out))
         out = self.fc2(out)
         out = self.softmax(out)
@@ -116,14 +113,13 @@ class Net(nn.Module):
         return out
 
 
-model = Net(n_channels=n_channels)
+model = Net()
 summary(model=model)
 
 
 # 10,2 --> (10/(10+2)), (2/(10+2))
 # 将使用 softmax  = 1 / 1 + e^x
-# opt = optim.SGD(params=model.parameters(), lr=learning_rate, momentum=0.9)
-opt = optim.AdamW(params=model.parameters(), lr=learning_rate)
+opt = optim.Adam(params=model.parameters(), lr=learning_rate)
 loss_fn = nn.NLLLoss()
 
 if __name__ == "__main__":
@@ -149,6 +145,8 @@ if __name__ == "__main__":
             loss = loss_fn(outputs, labels)
 
             l2_norm = sum([p.pow(2.0).sum() for p in model.parameters()])
+            # print("type loss", type(loss))  # tensor, 标量
+            # print("type l2_norm", type(l2_norm))  # tensor, 标量
             loss = loss + l2_lambda * l2_norm
 
             opt.zero_grad()
