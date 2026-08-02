@@ -6,9 +6,12 @@ from matplotlib import pyplot as plt
 from torchvision import datasets
 from torch.utils.tensorboard import SummaryWriter
 from torchinfo import summary
+import numpy as np
+import random
 
 torch.manual_seed(100)
-torch.cuda.manual_seed_all(100)
+np.random.seed(100)
+random.seed(100)
 
 ################################
 # 设置默认的设备，有 GPU 的话，默认使用 GPU
