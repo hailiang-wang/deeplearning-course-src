@@ -1,4 +1,6 @@
-
+'''
+使用 GAN 算法，实现的给马画斑马条纹的模型。
+'''
 import torch
 import torch.nn as nn
 
@@ -116,5 +118,6 @@ batch_out = netG(batch_t)
 out_t = (batch_out.data.squeeze() + 1.0) / 2.0
 out_img = transforms.ToPILImage()(out_t)
 
-out_img.save("/home/hai/Downloads/out.jpg")
-print("完成了")
+out_path = "/home/hai/Downloads/out.jpg"
+out_img.save(out_path)
+print("完成了: %s" % out_path)
