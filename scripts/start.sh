@@ -21,5 +21,5 @@ cd $baseDir/..
 source localrc
 
 set -x
-python --version
-jupyter notebook --no-browser
+python3 --version
+jupyter-notebook --no-browser
