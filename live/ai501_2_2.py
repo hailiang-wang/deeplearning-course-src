@@ -108,8 +108,7 @@ preprocess = transforms.Compose([transforms.Resize(256),
 
 # img = Image.open("data/p1ch2/horse.jpg")
 # img = Image.open("C:\\Downloads\\WeixinImage_20260614094709_11_5.jpg")
-# img = Image.open("/home/hai/Downloads/wechat_2026-08-05_150214_239.png")
-img = Image.open("/home/hai/Downloads/2026-08-16_11-05-37.png")
+img = Image.open("/home/hai/Downloads/wechat_2026-08-05_150214_239.png")
 img_t = preprocess(img)
 batch_t = torch.unsqueeze(img_t, 0)
 
