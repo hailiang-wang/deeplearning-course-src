@@ -11,6 +11,8 @@ https://ronxin.github.io/wevi/
 
 # https://pypi.org/project/text2vec/
 # https://github.com/shibing624/text2vec/blob/master/text2vec/word2vec.py
+# 安装
+# pip install text2vec gensim
 from text2vec import Word2Vec
 import torch
 from torch import nn
@@ -19,6 +21,7 @@ torch.set_printoptions(edgeitems=2, threshold=30)
 
 
 if __name__ == "__main__":
+    # 文件的下载地址：https://modelscope.cn/models/lili666/text2vec-word2vec-tencent-chinese/summary
     w2v_model = Word2Vec("./data/p1ch4/light_Tencent_AILab_ChineseEmbedding.bin", {
         "binary": True
     })
@@ -47,7 +50,12 @@ if __name__ == "__main__":
     print(cos(w_t, w3_t))
 
     '''
-    将一句话转化为张量
+    将一个句子转化为向量
+    1）将句子进行分词
+    2）将每个词得到向量，然后进行 对应位置求和(词袋模型)
+        苹果：[1,0]
+        公司：[2,1]
+        --> 苹果公司：[3,1]
     '''
     sent = '花呗更改绑定银行卡'
     sentence_embedding = w2v_model.encode(sent)
