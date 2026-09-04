@@ -1,174 +1,202 @@
 '''
-基于数据增强的全连接神经网络训练
+图像分类：实现鸟类和飞机的分类
+* 使用更好的损失函数
+* 以前，在 MSE 处理误差的方法，对于分类问题，是比较粗糙的
+* [0.9, 0.1] --> 0
+* [0.6, 0.4] --> 0
+
+* 现在，使用 NLL Loss 损失函数
+* 更充分的利用损失计算误差
+
 '''
 import sys
 import torch
+from torch import Tensor
 from matplotlib import pyplot as plt
-from torchvision import datasets, transforms
-from torchvision.transforms import v2
-import numpy as np
-import random
+from torchvision import datasets
+from torchinfo import summary
 from torch.utils.tensorboard import SummaryWriter
 
-torch.set_printoptions(edgeitems=3, threshold=20)
+# 在寻找最佳的超参数和网络的过程中，使用的随机数
+# 种子；在真正的全量数据上，注释掉
 torch.manual_seed(100)
-np.random.seed(100)
-random.seed(100)
 
-######################
-# 加载数据集
-######################
+default_device = torch.device("cpu")
+if torch.cuda.is_available():
+    default_device = torch.device("cuda:0")
+
+torch.set_default_device(device=default_device)
+print("Default device:", default_device)
+
+'''
+加载数据集
+'''
 data_path = "data-unversioned/p1ch7/"
+cifar10 = datasets.CIFAR10(data_path, train=True, download=False)
+cifar10_val = datasets.CIFAR10(data_path, train=False, download=False)
+class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer',
+               'dog', 'frog', 'horse', 'ship', 'truck']
 
-# 定义标准化参数 (CIFAR-10的均值和标准差)
-mean = (0.4915, 0.4823, 0.4468)
-std = (0.2470, 0.2435, 0.2616)
+# fig = plt.figure(figsize=(8, 3))
+# num_classes = 10
+# for i in range(num_classes):
+#     ax = fig.add_subplot(2, 5, 1 + i, xticks=[], yticks=[])
+#     ax.set_title(class_names[i])
+#     img = next(img for img, label in cifar10 if label == i)
+#     plt.imshow(img)
+# plt.show()
 
-# 基础转换：仅包含张量转换和标准化
-basic_transform = transforms.Compose([
+from torchvision import transforms
+from torchvision.transforms import Compose
+
+preprocess = Compose([
     transforms.ToTensor(),
-    transforms.Normalize(mean, std)
+    transforms.Resize([32, 32]),
+    # 做的统计后得到的 RGB 三个通道的均值和标准差
+    # imagenet, 超過 100　万张图片上
+    # https://www.image-net.org/download.php
+    transforms.Normalize((0.4915, 0.4823, 0.4468),  # mean
+                         (0.2470, 0.2435, 0.2616)),  # std
 ])
 
-# 加载原始数据集 (不带增强)
-cifar10 = datasets.CIFAR10(data_path, train=True, download=False)
-cifar10_val = datasets.CIFAR10(data_path, train=False, download=False,transform=basic_transform)
+cifar10 = datasets.CIFAR10(data_path, train=True, download=False, transform=preprocess)
+cifar10_val = datasets.CIFAR10(data_path, train=False, download=False, transform=preprocess)
 
-class_names_all = ['airplane', 'automobile', 'bird', 'cat', 'deer',
-                   'dog', 'frog', 'horse', 'ship', 'truck']
-
-# 过滤数据集，只需要飞机和鸟的图片
-class_names = ['airplane', 'bird']
+'''
+制作新的数据集：cifar2
+'''
 label_map = {0: 0, 2: 1}
+class_names = ['airplane', 'bird']  # airplane 飞机，的索引是 0, bird 的索引是 1
 cifar2 = [(img, label_map[label]) for img, label in cifar10 if label in [0, 2]]
 cifar2_val = [(img, label_map[label]) for img, label in cifar10_val if label in [0, 2]]
 
-'''
-数据增强部分
-'''
-augmentations = [
-    v2.Compose([
-        v2.RandomResizedCrop(32, scale=(0.8, 1.0)),
-        v2.RandomHorizontalFlip(p=0.5),
-        v2.ToTensor(),
-        v2.Normalize(mean=mean,std=std)
-    ]),
-    v2.Compose([
-        v2.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.9, 1.1)),
-        v2.ColorJitter(brightness=0.2, contrast=0.2),
-        v2.ToTensor(),
-        v2.Normalize(mean=mean,std=std)
-    ]),
-    v2.Compose([
-        transforms.ColorJitter(hue=0.1),
-        v2.ToTensor(),
-        v2.Normalize(mean=mean,std=std)
-    ]),
-    v2.Compose([
-        transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomAffine(degrees=10),
-        v2.ToTensor(),
-        v2.Normalize(mean=mean,std=std)
-    ]),
-    transforms.Compose([
-        transforms.RandomResizedCrop(32, scale=(0.7, 1.0)),
-        transforms.ColorJitter(saturation=0.3),
-        v2.ToTensor(),
-        v2.Normalize(mean=mean,std=std)
-    ])
-]
+print("Cifar2 数据集：训练集(%s), 验证集(%s)" % (len(cifar2), len(cifar2_val)))
 
-# 应用增强：对cifar2中的每张图片生成5张增强后的图片
-cifar2_transformed = []
+cifar2_val_x = torch.stack([img for img, _ in cifar2_val], dim=0)
+cifar2_val_y = torch.tensor([label for _, label in cifar2_val])
+print("cifar2_val_x shape", cifar2_val_x.shape)  # torch.Size([2000, 3, 32, 32])
+print("cifar2_val_y shape", cifar2_val_y.shape)  # torch.Size([2000])
 
-for img, label in cifar2:
-    for i in range(5):
-        augmented_img = augmentations[i](img)
-        cifar2_transformed.append((augmented_img, label))
-
-
-# 准备验证集张量
-validate_inputs = torch.stack(tuple([img for (img, _) in cifar2_val]), dim=0)
-validate_desired_outputs = torch.tensor([label for (_, label) in cifar2_val])
 
 '''
-构建模型
+搭建神经网络模型
 '''
-from torch import nn
-from torch import optim
-from torch.utils.data import DataLoader
+import torch.nn as nn
+import torch.optim as optimizer
 
+# 超参数， hyper params
+# 是因为，我们使用的方法，全称: 小批量随机梯度下降（mini-batch SGD）
+# 使用习惯, SGD：全量 1000 图片 = 50 个小数据集 x 20 个图片作为一批
+batch_size = 50  # 一次性输入 20 张图片，然后累积 loss，再进行梯度计算和参数更新
+
+# 有关疑问：
+# 1. 如果每次训练，都是用 1 张图片，计算 loss，那么这个方法不行：1）振荡不稳定，2）效率低，慢
+# 2. 如果每次训练，都用全量去更新，1000 张图片，这个方法，也不行：更新速度慢，学习的慢
+# 3. SGD 之所以工作，就是因为，考虑了不同数据之间的差异，做了平衡
+
+# 小批量随机梯度下降 的过程：
+# 1) 设定 batch size; 2) 设定训练的轮数 e.g. 10
+# 每一轮，都将全量数据打乱，然后分成小批量的子数据集
+
+n_epochs = 100
+learning_rate = 1e-3
 n_out = 2
-lr = 1e-3
-epochs = 10  
-batch_size = 10
 
 model = nn.Sequential(
-    nn.Linear(3072, 64),
+    nn.Linear(3 * 32 * 32, 32),
     nn.Tanh(),
-    nn.Linear(64, n_out),
-    nn.LogSoftmax(dim=-1)
+    nn.Linear(32, 32),
+    nn.Tanh(),
+    nn.Linear(32, 32),
+    nn.Tanh(),
+    nn.Linear(32, n_out),
+    nn.LogSoftmax(dim=-1),
 )
+model.to(device=default_device)
+summary(model)
 
-'''
-执行训练
-'''
-opt = optim.SGD(model.parameters(), lr=lr)
+opt = optimizer.SGD(params=model.parameters(), lr=learning_rate)
 loss_fn = nn.NLLLoss()
-train_data = DataLoader(cifar2_transformed, batch_size=batch_size, shuffle=True)  # 使用增强后的数据
-total_steps = 0
-writer = SummaryWriter()
 
-for epoch in range(epochs):
-    model.train()
-    
-    # 训练统计
-    train_loss = 0
-    train_steps = 0
-    
-    for imgs, labels in train_data:
-        imgs = imgs.view(imgs.shape[0], -1)
-        outputs = model(imgs)
-        loss = loss_fn(outputs, labels)
+if __name__ == "__main__":
 
-        opt.zero_grad()
-        loss.backward()
-        opt.step()
+    writer = SummaryWriter()
+    train_dataloader = torch.utils.data.DataLoader(
+        cifar2, batch_size=batch_size, shuffle=True,
+        generator=torch.Generator(device=default_device)
+    )
 
-        total_steps += 1
-        train_loss += loss.item()
-        train_steps += 1
+    total_step = 0
 
-    # 验证阶段
-    with torch.no_grad():
+    for epoch in range(1, n_epochs + 1):
+        model.train()
 
-        # 训练集准确率计算（使用当前epoch的输出）
-        train_outputs = model(validate_inputs.view(validate_inputs.shape[0], -1))  # 重用验证集输入进行评估
-        train_predict_labels = torch.argmax(train_outputs, dim=-1)
-        train_accuracy = (train_predict_labels == validate_desired_outputs).sum().item() / len(cifar2_val)
+        # 对训练集的数据，输出，loss 进行累积
+        train_loss = 0
+        train_steps = 0
+        train_predicts = None
+        train_labels = None
 
+        for imgs, labels in train_dataloader:
+            # imgs shape batchx3x32x32
+            imgs = imgs.to(default_device)
+            flatten_imgs = imgs.view(imgs.shape[0], -1)
+            # flatten_imgs shape batchx3072
+            predicts = model(flatten_imgs)  # 20x2 = [[0.1, 0.8], ... ]
+            # predicts
+            # print(predicts.shape)  # batch_sizex2
 
-        model.eval()
-        validate_outputs = model(validate_inputs.view(validate_inputs.shape[0], -1))
-        validate_predict_labels = torch.argmax(validate_outputs, dim=-1)
-        validate_predict_correct = (validate_predict_labels == validate_desired_outputs).sum().item()
-        
-        validate_accuracy = validate_predict_correct / len(cifar2_val)
-        validate_loss = loss_fn(validate_outputs, validate_desired_outputs).item()
+            loss = loss_fn(predicts, labels)
+            # 比如一个预测的结果是：[0.4, 0.8]
+            # 交叉熵：[这个应该是大的，这个应该是小的]
+            # 使用 MSE: [1, 0]
 
-        
-        writer.add_scalars("Loss", {
-            "Train": train_loss / train_steps,
-            "Validate": validate_loss
-        }, epoch)
+            opt.zero_grad()
+            loss.backward()
 
-        writer.add_scalars("Accuracy", {
-            "Train": train_accuracy,
-            "Validate": validate_accuracy
-        }, epoch)
+            with torch.no_grad():
+                opt.step()
+                total_step += 1
+                train_steps += 1
+                train_loss += loss.item()
 
-        print(f"Epoch {epoch}, Train/Loss {train_loss/train_steps:.4f}, "
-              f"Validate/Loss {validate_loss:.4f}, Train/Accuracy {train_accuracy:.4f}, "
-              f"Validate/Accuracy {validate_accuracy:.4f}")
+            if train_predicts is None:
+                train_predicts = predicts
+                train_labels = labels
+            else:
+                train_predicts = torch.cat((train_predicts, predicts), dim=0)
+                train_labels = torch.cat((train_labels, labels), dim=0)
 
-writer.close()
+            # print("Epoch %s, Total step %s, Loss %.4f" % (epoch, total_step, loss.item()))
+
+        # 对累积的值进行计算
+        train_epoch_loss = train_loss / train_steps
+        train_predicts = train_predicts.argmax(dim=-1)
+        # print("train_predicts shape", train_predicts.shape)
+        # print("actual labels shape", train_labels.shape)
+
+        train_accuracy = (((train_predicts == train_labels).sum().item()) / train_labels.shape[0])
+
+        # 进行模型的评估
+        model.eval()  # evaluate
+        with torch.no_grad():
+            vali_predicts: Tensor = model(cifar2_val_x.view(cifar2_val_x.shape[0], -1))
+            vali_loss = loss_fn(vali_predicts, cifar2_val_y).item()
+
+            vali_predicts = vali_predicts.argmax(dim=-1)
+            vali_accuracy = ((vali_predicts == cifar2_val_y).sum().item() / cifar2_val_y.shape[0])
+
+            writer.add_scalars("Loss", {
+                "Train": train_epoch_loss,
+                "Validate": vali_loss
+            }, epoch)
+
+            writer.add_scalars("Accuracy", {
+                "Train": train_accuracy,
+                "Validate": vali_accuracy
+            }, epoch)
+
+            print("Epoch %s, train loss %.4f, train accuracy %.4f, validate loss %.4f, validate accuracy %.4f" % (epoch, train_epoch_loss, train_accuracy, vali_loss, vali_accuracy))
+
+    # torch.save(model.state_dict(), "ai501_7_1.pth")
+    writer.close()

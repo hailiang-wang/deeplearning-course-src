@@ -1,42 +1,34 @@
+'''
+对 7_1 的模型进行评估，验证
+'''
 import sys
-from practice_7_1 import *
-from torchinfo import summary
+from ai501_7_1 import *
 
-torch.set_printoptions(edgeitems=2, threshold=50)
+torch.set_printoptions(edgeitems=2, threshold=30)
 
-model.load_state_dict(torch.load("sample_model.pth"))
-model.to(default_device)
-
+model.load_state_dict(torch.load("ai501_7_1.pth"))
+model.to(device=default_device)
 summary(model)
 
 correct = 0
 total = 0
 
-val_loader = torch.utils.data.DataLoader(cifar2_val, batch_size=20, shuffle=True,
+val_loader = torch.utils.data.DataLoader(cifar2_val, batch_size=batch_size,
+                                         shuffle=False,
                                          generator=torch.Generator(device=default_device))
 
+model.eval()
 
-with torch.no_grad():
-    for (imgs, labels) in val_loader:
-        imgs = imgs.to(default_device).view(imgs.shape[0], -1)
-        outputs = model(imgs)
+for imgs, labels in val_loader:
+    imgs = imgs.view(imgs.shape[0], -1).to(default_device)
+    predicts = model(imgs)
 
-        # print("*"*80)
-        # print("outputs")
-        # print(outputs)
+    outputs = torch.argmax(predicts, dim=-1)
 
-        # print("outputs.shape")
-        # print(outputs.shape)
+    print(outputs.shape)
+    print(labels.shape)
 
-        # print("labels")
-        # print(labels)
+    correct += (labels == outputs).sum()
+    total += labels.shape[0]
 
-        filter_result = torch.argmax(outputs, dim=-1)
-
-        # print("filter_result")
-        # print(filter_result)
-
-        correct += (labels == filter_result).sum()
-        total += imgs.shape[0]
-
-print("Accuracy %f" % (correct / total))
+print("Accuracy %.4f" % (correct / total))

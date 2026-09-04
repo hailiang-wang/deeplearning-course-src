@@ -1,184 +1,206 @@
-#############################################
-# 在 practice_7_3.py 的基础上
-# 使用 GPU 运算
-#############################################
+'''
+图像分类：实现鸟类和飞机的分类
+* 实现多个指标的统计
+* 计算混淆矩阵，查准率，查全率
+* https://zhuanlan.zhihu.com/p/2036748509299397815
+'''
+import sys
 import torch
+from torch import Tensor
 from matplotlib import pyplot as plt
 from torchvision import datasets
+from torchinfo import summary
 from torch.utils.tensorboard import SummaryWriter
 
+# 在寻找最佳的超参数和网络的过程中，使用的随机数
+# 种子；在真正的全量数据上，注释掉
 torch.manual_seed(100)
-torch.cuda.manual_seed_all(100)
 
-################################
-# 设置默认的设备，有 GPU 的话，默认使用 GPU
-################################
 default_device = torch.device("cpu")
 if torch.cuda.is_available():
-    torch.set_default_device(torch.device("cuda"))
-    default_device = torch.device("cuda")
+    default_device = torch.device("cuda:0")
 
+torch.set_default_device(device=default_device)
+print("Default device:", default_device)
 
-print("default device", default_device)
-
-################################
-# 加载数据集
-################################
+'''
+加载数据集
+'''
 data_path = "data-unversioned/p1ch7/"
 cifar10 = datasets.CIFAR10(data_path, train=True, download=False)
 cifar10_val = datasets.CIFAR10(data_path, train=False, download=False)
 class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer',
                'dog', 'frog', 'horse', 'ship', 'truck']
 
+# fig = plt.figure(figsize=(8, 3))
+# num_classes = 10
+# for i in range(num_classes):
+#     ax = fig.add_subplot(2, 5, 1 + i, xticks=[], yticks=[])
+#     ax.set_title(class_names[i])
+#     img = next(img for img, label in cifar10 if label == i)
+#     plt.imshow(img)
+# plt.show()
+
 from torchvision import transforms
+from torchvision.transforms import Compose
 
-################################
-# 数据的规范化
-# 比如，使用 单位标准差 方法
-# https://zhuanlan.zhihu.com/p/2028540638145062215
-################################
-cifar10 = datasets.CIFAR10(data_path, train=True, download=False, transform=transforms.Compose([
+preprocess = Compose([
     transforms.ToTensor(),
-    transforms.Normalize((0.4915, 0.4823, 0.4468),  # imagenet, 超過 100　万张图片上，做的统计后得到的 RGB 三个通道的均值和标准差
-                         (0.2470, 0.2435, 0.2616))
-]))
+    transforms.Resize([32, 32]),
+    # 做的统计后得到的 RGB 三个通道的均值和标准差
+    # imagenet, 超過 100　万张图片上
+    # https://www.image-net.org/download.php
+    transforms.Normalize((0.4915, 0.4823, 0.4468),  # mean
+                         (0.2470, 0.2435, 0.2616)),  # std
+])
 
-cifar10_val = datasets.CIFAR10(data_path, train=False, download=False, transform=transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.4915, 0.4823, 0.4468),  # imagenet, 超過 100　万张图片上，做的统计后得到的 RGB 三个通道的均值和标准差
-                         (0.2470, 0.2435, 0.2616))
-]))
+cifar10 = datasets.CIFAR10(data_path, train=True, download=False, transform=preprocess)
+cifar10_val = datasets.CIFAR10(data_path, train=False, download=False, transform=preprocess)
 
-################################
-# 训练神经网络
-################################
-print("Load dataset ...")
+'''
+制作新的数据集：cifar2
+'''
 label_map = {0: 0, 2: 1}
 class_names = ['airplane', 'bird']  # airplane 飞机，的索引是 0, bird 的索引是 1
-# 训练数据
 cifar2 = [(img, label_map[label]) for img, label in cifar10 if label in [0, 2]]
-# 验证数据
-cifar2_val = [(img, label_map[label])
-              for img, label in cifar10_val if label in [0, 2]]
+cifar2_val = [(img, label_map[label]) for img, label in cifar10_val if label in [0, 2]]
 
-print("  Len of cifar2", len(cifar2))
-print("  Len of cifar2_val", len(cifar2_val))
+print("Cifar2 数据集：训练集(%s), 验证集(%s)" % (len(cifar2), len(cifar2_val)))
 
-validate_inputs = torch.stack(
-    tuple([img.to(default_device) for (img, _) in cifar2_val]), dim=0)
-validate_labels = torch.tensor([label for (_, label) in cifar2_val])
+cifar2_val_x = torch.stack([img for img, _ in cifar2_val], dim=0)
+cifar2_val_y = torch.tensor([label for _, label in cifar2_val])
+print("cifar2_val_x shape", cifar2_val_x.shape)  # torch.Size([2000, 3, 32, 32])
+print("cifar2_val_y shape", cifar2_val_y.shape)  # torch.Size([2000])
 
-# 搭建神经网络
+
+'''
+搭建神经网络模型
+'''
 import torch.nn as nn
-import torch.optim as optim
+import torch.optim as optimizer
 
-batch_size = 10
-n_epoches = 5
+# 超参数， hyper params
+# 是因为，我们使用的方法，全称: 小批量随机梯度下降（mini-batch SGD）
+# 使用习惯, SGD：全量 1000 图片 = 50 个小数据集 x 20 个图片作为一批
+batch_size = 50  # 一次性输入 20 张图片，然后累积 loss，再进行梯度计算和参数更新
+
+# 有关疑问：
+# 1. 如果每次训练，都是用 1 张图片，计算 loss，那么这个方法不行：1）振荡不稳定，2）效率低，慢
+# 2. 如果每次训练，都用全量去更新，1000 张图片，这个方法，也不行：更新速度慢，学习的慢
+# 3. SGD 之所以工作，就是因为，考虑了不同数据之间的差异，做了平衡
+
+# 小批量随机梯度下降 的过程：
+# 1) 设定 batch size; 2) 设定训练的轮数 e.g. 10
+# 每一轮，都将全量数据打乱，然后分成小批量的子数据集
+
+n_epochs = 100
 learning_rate = 1e-3
-n_out = 2  # 希望神经的输出，是一个含有两个元素的向量，
-# 比如 [0.9, 0.1]，然后约定，数值较大的索引，就是分类标签，比如 0.9 的索引是 0, 0.1 的索引是 1，那么，前面的向量代表图片属于分类 0
+n_out = 2
 
 model = nn.Sequential(
-    nn.Linear(3072, 512),  # 3072 = 32*32*3
+    nn.Linear(3 * 32 * 32, 32),
     nn.Tanh(),
-    nn.Linear(512, 32),
+    nn.Linear(32, 32),
+    nn.Tanh(),
+    nn.Linear(32, 32),
     nn.Tanh(),
     nn.Linear(32, n_out),
-    nn.LogSoftmax(dim=1)
 )
-# model.to(default_device)
+model.to(device=default_device)
+summary(model)
 
-# 10,2 --> (10/(10+2)), (2/(10+2))
-# 将使用 softmax  = 1 / 1 + e^x
-opt = optim.Adam(params=model.parameters(), lr=learning_rate)
-loss_fn = nn.NLLLoss()
+opt = optimizer.SGD(params=model.parameters(), lr=learning_rate)
+loss_fn = nn.MSELoss()
 
 if __name__ == "__main__":
-    train_loader = torch.utils.data.DataLoader(
-        cifar2, batch_size=batch_size, shuffle=True, generator=torch.Generator(device=default_device))
+
     writer = SummaryWriter()
+    train_dataloader = torch.utils.data.DataLoader(
+        cifar2, batch_size=batch_size, shuffle=True,
+        generator=torch.Generator(device=default_device)
+    )
 
     total_step = 0
 
-    print("Start to train neural network ...")
-    for epoch in range(n_epoches):
-        # 对训练的 Loss 进行记录
+    for epoch in range(1, n_epochs + 1):
+        model.train()
+
+        # 对训练集的数据，输出，loss 进行累积
         train_loss = 0
-        train_step = 0
-        train_outputs = None
+        train_steps = 0
+        train_predicts = None
         train_labels = None
 
-        for imgs, labels in train_loader:
-            # 20x3x32x32 -> 20x3072
+        for imgs, labels in train_dataloader:
+            # imgs shape batchx3x32x32
             imgs = imgs.to(default_device)
-            # print("imgs device", imgs.device)
-            # import sys
-            # sys.exit(1)
+            flatten_imgs = imgs.view(imgs.shape[0], -1)
+            # flatten_imgs shape batchx3072
+            predicts = model(flatten_imgs)  # 20x2 = [[0.1, 0.8], ... ]
+            # predicts
+            # print(predicts.shape)  # batch_sizex2
 
-            outputs = model(imgs.view(imgs.shape[0], -1))
-            loss = loss_fn(outputs, labels)
+            # print(labels.shape)  # batch_size
+            # torch.Size([20]), 20 是 batch_size
+            # tensor([1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1])
+
+            labels_onehot = torch.zeros_like(predicts)
+            labels_onehot = labels_onehot.scatter(1, labels.unsqueeze(dim=1), 1.0).to(default_device)
+            # tensor([[0,1], [0,1], [0,1], [1,0], ...])
+            # print(labels_onehot)
+            # print(labels_onehot.shape)
+
+            loss = loss_fn(predicts, labels_onehot)
 
             opt.zero_grad()
             loss.backward()
 
             with torch.no_grad():
                 opt.step()
-                train_loss += loss.item()
-                train_step += 1
                 total_step += 1
+                train_steps += 1
+                train_loss += loss.item()
 
-                if train_outputs is None:
-                    train_outputs = outputs
-                    train_labels = labels
-                else:
-                    train_outputs = torch.cat((train_outputs, outputs), dim=0)
-                    train_labels = torch.cat((train_labels, labels), dim=0)
+            if train_predicts is None:
+                train_predicts = predicts
+                train_labels = labels
+            else:
+                train_predicts = torch.cat((train_predicts, predicts), dim=0)
+                train_labels = torch.cat((train_labels, labels), dim=0)
 
-            # print(f'Step {total_step} epoch {epoch}, loss {loss}')
+            # print("Epoch %s, Total step %s, Loss %.4f" % (epoch, total_step, loss.item()))
 
-        '''
-        每 1 个 Epoch 完成训练后，进行评测
-        '''
-        # 记录训练的损失函数值
-        train_loss = train_loss / train_step
+        # 对累积的值进行计算
+        train_epoch_loss = train_loss / train_steps
+        train_predicts = train_predicts.argmax(dim=-1)
+        # print("train_predicts shape", train_predicts.shape)
+        # print("actual labels shape", train_labels.shape)
 
-        # 记录训练的准确率
-        predict_labels = torch.argmax(train_outputs, dim=-1)
-        predict_correct = (predict_labels == train_labels).sum()
-        train_accuracy = predict_correct / predict_labels.numel()
+        train_accuracy = (((train_predicts == train_labels).sum().item()) / train_labels.shape[0])
 
-        # 进行验证集数据的预测
+        # 进行模型的评估
+        model.eval()  # evaluate
         with torch.no_grad():
-            # 计算验证集上的损失
-            validate_output = model(validate_inputs.view(
-                validate_inputs.shape[0], -1))
+            vali_predicts: Tensor = model(cifar2_val_x.view(cifar2_val_x.shape[0], -1))
+            # print(vali_predicts.shape) # torch.Size([2000])
+            cifar2_val_y_onehot = torch.zeros_like(vali_predicts)
+            cifar2_val_y_onehot.scatter_(-1, cifar2_val_y.unsqueeze(dim=-1), 1.0)
+            vali_loss = loss_fn(vali_predicts, cifar2_val_y_onehot).item()
 
-            validate_loss = loss_fn(validate_output, validate_labels)
-
-            # 计算验证集上的准确率
-            predict_labels = torch.argmax(validate_output, dim=-1)
-            predict_correct = (predict_labels == validate_labels).sum()
-            validate_accuracy = predict_correct / len(cifar2_val)
-
-            # writer.add_scalar("Train/Loss", train_loss, epoch)
-            # writer.add_scalar(
-            #     "Validate/Loss", validate_loss.item(), total_step)
-            # writer.add_scalar("Validate/Accuracy", validate_accuracy, epoch)
-            # writer.add_scalar("Train/Accuracy", train_accuracy, epoch)
+            vali_predicts = vali_predicts.argmax(dim=-1)
+            vali_accuracy = ((vali_predicts == cifar2_val_y).sum().item() / cifar2_val_y.shape[0])
 
             writer.add_scalars("Loss", {
-                "Train": train_loss,
-                "validate": validate_loss.item()
+                "Train": train_epoch_loss,
+                "Validate": vali_loss
             }, epoch)
 
             writer.add_scalars("Accuracy", {
-                "Train": train_accuracy.item(),
-                "validate": validate_accuracy.item()
+                "Train": train_accuracy,
+                "Validate": vali_accuracy
             }, epoch)
 
-            print("  Epoch %s, train (loss %.4f, accuracy %.4f), validate(loss %.4f, accuracy %.4f)" %
-                  (epoch, train_loss, train_accuracy.item(), validate_loss.item(), validate_accuracy.item()))
+            print("Epoch %s, train loss %.4f, train accuracy %.4f, validate loss %.4f, validate accuracy %.4f" % (epoch, train_epoch_loss, train_accuracy, vali_loss, vali_accuracy))
 
-    print("Train done, model saved to sample_model.pth, checkout log in ./runs with tensorboard.")
-    torch.save(model.state_dict(), "sample_model.pth")
+    # torch.save(model.state_dict(), "ai501_7_1.pth")
     writer.close()

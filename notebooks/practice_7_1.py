@@ -1,31 +1,35 @@
+'''
+图像分类：
+实现鸟类和飞机的分类
+'''
+import sys
 import torch
+from torch import Tensor
 from matplotlib import pyplot as plt
 from torchvision import datasets
+from torchinfo import summary
 
+# 在寻找最佳的超参数和网络的过程中，使用的随机数
+# 种子；在真正的全量数据上，注释掉
 torch.manual_seed(100)
-torch.cuda.manual_seed_all(100)
 
-################################
-# 设置默认的设备，有 GPU 的话，默认使用 GPU
-################################
 default_device = torch.device("cpu")
 if torch.cuda.is_available():
-    torch.set_default_device(torch.device("cuda"))
-    default_device = torch.device("cuda")
+    default_device = torch.device("cuda:0")
 
+torch.set_default_device(device=default_device)
+print("Default device:", default_device)
 
-print("default device", default_device)
-
-################################
-# 加载数据集
-################################
+'''
+加载数据集
+'''
 data_path = "data-unversioned/p1ch7/"
 cifar10 = datasets.CIFAR10(data_path, train=True, download=False)
 cifar10_val = datasets.CIFAR10(data_path, train=False, download=False)
 class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer',
                'dog', 'frog', 'horse', 'ship', 'truck']
 
-# fig = plt.figure(figsize=(8,3))
+# fig = plt.figure(figsize=(8, 3))
 # num_classes = 10
 # for i in range(num_classes):
 #     ax = fig.add_subplot(2, 5, 1 + i, xticks=[], yticks=[])
@@ -35,89 +39,97 @@ class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer',
 # plt.show()
 
 from torchvision import transforms
+from torchvision.transforms import Compose
 
-# cifar10 = datasets.CIFAR10(data_path, train=True, download=False, transform=transforms.ToTensor())
-# cifar10_val = datasets.CIFAR10(data_path, train=False, download=False,  transform=transforms.ToTensor())
-
-# img_t, img_label = cifar10[0]
-# print(type(img_t))
-# print("img_t shape", img_t.shape) # 3x32x32
-# print("img_t label", img_label)
-
-
-################################
-# 数据的规范化
-# 比如，使用 单位标准差 方法
-# https://zhuanlan.zhihu.com/p/2028540638145062215
-################################
-cifar10 = datasets.CIFAR10(data_path, train=True, download=False, transform=transforms.Compose([
+preprocess = Compose([
     transforms.ToTensor(),
-    transforms.Normalize((0.4915, 0.4823, 0.4468),  # imagenet, 超過 100　万张图片上，做的统计后得到的 RGB 三个通道的均值和标准差
-                         (0.2470, 0.2435, 0.2616))
-]))
+    transforms.Resize([32, 32]),
+    # 做的统计后得到的 RGB 三个通道的均值和标准差
+    # imagenet, 超過 100　万张图片上
+    # https://www.image-net.org/download.php
+    transforms.Normalize((0.4915, 0.4823, 0.4468),  # mean
+                         (0.2470, 0.2435, 0.2616)),  # std
+])
 
-cifar10_val = datasets.CIFAR10(data_path, train=False, download=False, transform=transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.4915, 0.4823, 0.4468),  # imagenet, 超過 100　万张图片上，做的统计后得到的 RGB 三个通道的均值和标准差
-                         (0.2470, 0.2435, 0.2616))
-]))
+cifar10 = datasets.CIFAR10(data_path, train=True, download=False, transform=preprocess)
+cifar10_val = datasets.CIFAR10(data_path, train=False, download=False, transform=preprocess)
 
-################################
-# 训练神经网络
-################################
-
+'''
+制作新的数据集：cifar2
+'''
 label_map = {0: 0, 2: 1}
 class_names = ['airplane', 'bird']  # airplane 飞机，的索引是 0, bird 的索引是 1
-# 训练数据
 cifar2 = [(img, label_map[label]) for img, label in cifar10 if label in [0, 2]]
-# 验证数据
-cifar2_val = [(img, label_map[label])
-              for img, label in cifar10_val if label in [0, 2]]
+cifar2_val = [(img, label_map[label]) for img, label in cifar10_val if label in [0, 2]]
 
-print("Len of cifar2", len(cifar2))
-print("Len of cifar2_val", len(cifar2_val))
+print("Cifar2 数据集：训练集(%s), 验证集(%s)" % (len(cifar2), len(cifar2_val)))
 
-# 搭建神经网络
+'''
+搭建神经网络模型
+'''
 import torch.nn as nn
-import torch.optim as optim
+import torch.optim as optimizer
 
-batch_size = 30
-n_epoches = 10
+# 超参数， hyper params
+# 是因为，我们使用的方法，全称: 小批量随机梯度下降（mini-batch SGD）
+# 使用习惯, SGD：全量 1000 图片 = 50 个小数据集 x 20 个图片作为一批
+batch_size = 20  # 一次性输入 20 张图片，然后累积 loss，再进行梯度计算和参数更新
+
+# 有关疑问：
+# 1. 如果每次训练，都是用 1 张图片，计算 loss，那么这个方法不行：1）振荡不稳定，2）效率低，慢
+# 2. 如果每次训练，都用全量去更新，1000 张图片，这个方法，也不行：更新速度慢，学习的慢
+# 3. SGD 之所以工作，就是因为，考虑了不同数据之间的差异，做了平衡
+
+# 小批量随机梯度下降 的过程：
+# 1) 设定 batch size; 2) 设定训练的轮数 e.g. 10
+# 每一轮，都将全量数据打乱，然后分成小批量的子数据集
+
+n_epochs = 10
 learning_rate = 1e-3
-n_out = 2  # 希望神经的输出，是一个含有两个元素的向量，
-# 比如 [0.9, 0.1]，然后约定，数值较大的索引，就是分类标签，比如 0.9 的索引是 0, 0.1 的索引是 1，那么，前面的向量代表图片属于分类 0
+n_out = 2
 
 model = nn.Sequential(
-    nn.Linear(3072, 512),  # 3072 = 32*32*3
+    nn.Linear(3 * 32 * 32, 1024),
     nn.Tanh(),
-    nn.Linear(512, 32),
+    nn.Linear(1024, 32),
     nn.Tanh(),
     nn.Linear(32, n_out),
-    nn.LogSoftmax(dim=1)
 )
-model.to(default_device)
+model.to(device=default_device)
+summary(model)
 
-# 10,2 --> (10/(10+2)), (2/(10+2))
-# 将使用 softmax  = 1 / 1 + e^x
-opt = optim.Adam(params=model.parameters(), lr=learning_rate)
-loss_fn = nn.NLLLoss()
+opt = optimizer.SGD(params=model.parameters(), lr=learning_rate)
+loss_fn = nn.MSELoss()
 
 if __name__ == "__main__":
-    train_loader = torch.utils.data.DataLoader(
-        cifar2, batch_size=batch_size, shuffle=True, generator=torch.Generator(device=default_device))
+    train_dataloader = torch.utils.data.DataLoader(
+        cifar2, batch_size=batch_size, shuffle=True,
+        generator=torch.Generator(device=default_device)
+    )
 
     total_step = 0
 
-    for epoch in range(n_epoches):
-        for imgs, labels in train_loader:
-            # 20x3x32x32 -> 20x3072
+    for epoch in range(1, n_epochs + 1):
+        for imgs, labels in train_dataloader:
+            # imgs shape batchx3x32x32
             imgs = imgs.to(default_device)
-            # print("imgs device", imgs.device)
-            # import sys
-            # sys.exit(1)
+            flatten_imgs = imgs.view(imgs.shape[0], -1)
+            # flatten_imgs shape batchx3072
+            predicts = model(flatten_imgs)  # 20x2 = [[0.1, 0.8], ... ]
+            # predicts
+            # print(predicts.shape)  # batch_sizex2
 
-            outputs = model(imgs.view(imgs.shape[0], -1))
-            loss = loss_fn(outputs, labels)
+            # print(labels.shape)  # batch_size
+            # torch.Size([20]), 20 是 batch_size
+            # tensor([1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1])
+
+            labels_onehot = torch.zeros_like(predicts)
+            labels_onehot = labels_onehot.scatter(1, labels.unsqueeze(dim=1), 1.0).to(default_device)
+            # tensor([[0,1], [0,1], [0,1], [1,0], ...])
+            # print(labels_onehot)
+            # print(labels_onehot.shape)
+
+            loss = loss_fn(predicts, labels_onehot)
 
             opt.zero_grad()
             loss.backward()
@@ -126,6 +138,6 @@ if __name__ == "__main__":
                 opt.step()
                 total_step += 1
 
-            print(f'Step {total_step} epoch {epoch}, loss {loss}')
+            print("Epoch %s, Total step %s, Loss %.4f" % (epoch, total_step, loss.item()))
 
-    torch.save(model.state_dict(), "sample_model.pth")
+    torch.save(model.state_dict(), "ai501_7_1.pth")
